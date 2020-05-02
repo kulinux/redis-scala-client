@@ -90,8 +90,15 @@ class Parser(reader: RDReader) {
 
     def parseBulkString(): Array[Byte] = {
         val length = reader.readInt()
-        reader.read(length)
+        val res = reader.read(length)
+        reader.skip(2)
+        res
     } 
+
+    def parseArray(): Seq[RDMessage] = {
+        val length = reader.readInt()
+        1 to length map (_ => parse())
+    }
 
     def parse(): RDMessage = {
         var ch = reader.read()
@@ -101,6 +108,7 @@ class Parser(reader: RDReader) {
             case '-' => RDError(parseErrors())
             case ':' => RDInteger(parseInteger())
             case '$' => RDBulkString(parseBulkString())
+            case '*' => RDArray(parseArray())
             case unknown => throw new RDProtocolException(s"Unknown start of msg $unknown")
         }
     }

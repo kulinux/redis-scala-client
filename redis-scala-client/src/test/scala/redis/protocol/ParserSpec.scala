@@ -25,12 +25,19 @@ class ParserSpec extends AnyFlatSpec with Matchers {
         parseMsg(msg) should be (RDInteger(1000))
     }
 
-     "Parser" should "parse bulk string" in {
+    "Parser" should "parse bulk string" in {
+        val msg = "*5\r\n:1\r\n:2\r\n:3\r\n$6\r\nfoobar\r\n+OK\r\n"
+        val res = parseMsg(msg).asInstanceOf[RDArray].value
+        res.length shouldBe(5)
+        println(res)
+    }
+
+    "Parser" should "parse array" in {
         val msg = "$6\r\nfoobar\r\n"
         new String(parseMsg(msg).asInstanceOf[RDBulkString].value) should be ("foobar")
     }
 
-     "Parser" should "error on parse wrong simple string" in {
+    "Parser" should "error on parse wrong simple string" in {
         val msg = "+OK\r"
         assertThrows[RDProtocolException] {
             parseMsg(msg)
