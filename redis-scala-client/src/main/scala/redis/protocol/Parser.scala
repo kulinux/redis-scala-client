@@ -1,33 +1,43 @@
 package redis.protocol
 
 import java.io.InputStream
-
-import cats._
-import cats.implicits._
-import cats.data._
-import cats.effect.IO
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
+import scala.util.Try
 
 
+class RDProtocolException(msg: String, e: Exception) extends Exception(msg, e) {
+    def this(msg: String) {
+        this(msg, null)
+    } 
+    def this(e: Exception) {
+        this(null, e)
+    } 
+}
 trait RDReader {
-    def readChar(): Char
+    def read(): Int
     def readInt(): Int
     def readString(): String
     def read(length: Int): Array[Byte]
-    def skip(length: Int)
+    def skip(length: Long): Long
 }
 
 class RDInputReader(is: InputStream) extends RDReader {
-    def readChar(): Char = is.read().toChar 
-    def readInt(): Int = readString().toInt
+    def read(): Int = is.read()
+    def readInt(): Int = try {
+        readString().toInt
+    } catch {
+        case e: Exception => throw new RDProtocolException(e)
+    }
 
-    def skip(length: Int): Unit = is.skip(length)
+    def skip(length: Long): Long = is.skip(length)
     def read(length: Int): Array[Byte] = {
         val avail = is.available()
         if(avail >= length) {
             val arr = new Array[Byte](length)
-            is.read(arr)
+            val res = is.read(arr)
+            if(res != length) throw new RDProtocolException(
+                s"read eof while looking for $length bytes")
             return arr
         } else {
             val bos = new ByteArrayOutputStream()
@@ -39,6 +49,8 @@ class RDInputReader(is: InputStream) extends RDReader {
                 count = count + 1
                 bos.write(read)
                 read = is.read()
+                if(read == -1) throw new RDProtocolException(
+                    s"read eof while looking for $length bytes")
             }
             return bos.toByteArray()
         }
@@ -48,7 +60,9 @@ class RDInputReader(is: InputStream) extends RDReader {
         val bos = new ByteArrayOutputStream()
         var encountR = false
         var read = is.read()
+        if(read == -1) throw new RDProtocolException("ReadString error, eof reached")
         while( read >= 0 ) {
+            if(read == -1) throw new RDProtocolException("ReadString error, \r\n not found")
             encountR = read == '\r'
             if(read == '\r')
             {
@@ -62,7 +76,7 @@ class RDInputReader(is: InputStream) extends RDReader {
             bos.write(read)
             read = is.read()
         }
-        throw new RuntimeException("Error, \\r\\n not found")
+        throw new RDProtocolException("Error, \\r\\n not found")
     }
 
 }
@@ -80,12 +94,14 @@ class Parser(reader: RDReader) {
     } 
 
     def parse(): RDMessage = {
-        var ch = reader.readChar()
-        ch match {
+        var ch = reader.read()
+        if(ch == - 1) throw new RDProtocolException("No next message")
+        ch.toChar match {
             case '+' => RDSimpleString(parseSimpleString())
             case '-' => RDError(parseErrors())
             case ':' => RDInteger(parseInteger())
             case '$' => RDBulkString(parseBulkString())
+            case unknown => throw new RDProtocolException(s"Unknown start of msg $unknown")
         }
     }
 
