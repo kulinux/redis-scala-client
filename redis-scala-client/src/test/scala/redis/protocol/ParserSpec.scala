@@ -6,6 +6,9 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.ByteArrayInputStream
 
+import Marshallers._
+import SyntaxMarshaller._
+
 class ParserSpec extends AnyFlatSpec with Matchers {
 
     def parseMsg(msg: String) = {
@@ -29,7 +32,6 @@ class ParserSpec extends AnyFlatSpec with Matchers {
         val msg = "*5\r\n:1\r\n:2\r\n:3\r\n$6\r\nfoobar\r\n+OK\r\n"
         val res = parseMsg(msg).asInstanceOf[RDArray].value
         res.length shouldBe(5)
-        println(res)
     }
 
     "Parser" should "parse array" in {
@@ -58,7 +60,24 @@ class ParserSpec extends AnyFlatSpec with Matchers {
         }
     }
 
+    "Marshall" should "work" in {
+        val msgStr = new RDSimpleString("PING")
+        msgStr.marshall() should be("+PING\r\n".getBytes())
+        val msgInt = RDInteger(1000)
+        msgInt.marshall should be(":1000\r\n".getBytes())
 
-    //Ahora faltan los casos de error
+        val msgBulk = RDBulkString("foobar".getBytes())
+        msgBulk.marshall should be("$6\r\nfoobar\r\n".getBytes())
+
+
+        val msgArr = RDArray(Seq(
+            RDBulkString("foo".getBytes()),
+            RDBulkString("bar".getBytes())
+        ))
+        msgArr.marshall should be("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".getBytes())
+
+    }
+
+
 
 }
