@@ -114,7 +114,7 @@ class Parser(reader: RDReader) {
       case '-' => RDError(parseErrors())
       case ':' => RDInteger(parseInteger())
       case '$' => RDBulkString(parseBulkString())
-      case '*' => RDArray(parseArray())
+      case '*' => RDArray(parseArray():_*)
       case unknown =>
         throw new RDProtocolException(s"Unknown start of msg $unknown")
     }

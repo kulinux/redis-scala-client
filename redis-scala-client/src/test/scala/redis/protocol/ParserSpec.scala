@@ -70,10 +70,10 @@ class ParserSpec extends AnyFlatSpec with Matchers {
         msgBulk.marshall should be("$6\r\nfoobar\r\n".getBytes())
 
 
-        val msgArr = RDArray(Seq(
+        val msgArr = RDArray(
             RDBulkString("foo".getBytes()),
             RDBulkString("bar".getBytes())
-        ))
+        )
         msgArr.marshall should be("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".getBytes())
 
     }
