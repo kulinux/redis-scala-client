@@ -14,14 +14,15 @@ import java.net.InetSocketAddress
 import java.io.ByteArrayInputStream
 import cats.effect.Resource.Par
 
-class Redis {
-  val marshaller = new CommandMarshaller
-  val parser = new CommandParser
-  val sender = new CommandRedisSender
-  def ping[F[_]: Concurrent: ContextShift](req: PingRequest): F[PingResponse] =
+class Redis[F[_]: Concurrent: ContextShift] {
+  private val marshaller = new CommandMarshaller
+  private val parser = new CommandParser
+  private val sender = new CommandRedisSender
+
+  def ping(req: PingRequest): F[PingResponse] =
     sendCommand(req, marshaller.ping, parser.ping)
 
-  def sendCommand[F[_]: Concurrent: ContextShift, Req <: CommandRequest, Res <: CommandResponse](
+  private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
       req: Req,
       marsh: Req => RDArray,
       pars: RDMessage => Res
@@ -45,20 +46,14 @@ class CommandMarshaller {
 
 class CommandParser {
   def ping(req: RDMessage): PingResponse = {
-    assert(req.isInstanceOf[RDSimpleString])
-    PingResponse(req.asInstanceOf[RDSimpleString].value)
+    assert(req.isInstanceOf[RDBulkString])
+    PingResponse(new String(req.asInstanceOf[RDBulkString].value))
   }
 }
 
 class CommandRedisSender {
   val host = "127.0.0.1"
   val port = 6379
-
-  def sendToSocket[F[_]: Concurrent: ContextShift](toSend: Array[Byte]): F[Parser] = 
-      Sck.oneShotClient(host, port, toSend)
-        .map(new ByteArrayInputStream(_))
-        .map(new RDInputReader(_))
-        .map(new Parser(_))
 
   def send[F[_]: Concurrent: ContextShift](msg: RDArray): F[RDMessage] = {
     for {
@@ -67,31 +62,56 @@ class CommandRedisSender {
       rspMsg <- parser.parse().pure[F]
     } yield rspMsg
   }
+
+  private def sendToSocket[F[_]: Concurrent: ContextShift](
+      toSend: Array[Byte]
+  ): F[Parser] =
+    Sck
+      .oneShotClient(host, port, toSend)
+      .map(new ByteArrayInputStream(_))
+      .map(new RDInputReader(_))
+      .map(new Parser(_))
+
 }
 
 object Sck {
 
-    def oneShotClient[F[_]: Concurrent: ContextShift](host: String, port: Int, toSend: Array[Byte]): F[Array[Byte]] =
-        Blocker[F].use { blocker =>
-            SocketGroup[F](blocker).use { socketGroup =>
-                Sck.client[F](socketGroup, host, port, toSend)
-            }
-        }
+  def oneShotClient[F[_]: Concurrent: ContextShift](
+      host: String,
+      port: Int,
+      toSend: Array[Byte]
+  ): F[Array[Byte]] =
+    Blocker[F].use { blocker =>
+      SocketGroup[F](blocker).use { socketGroup =>
+        Sck.client[F](socketGroup, host, port, toSend)
+      }
+    }
 
-    def client[F[_]: Concurrent: ContextShift](
-        socketGroup: SocketGroup,
-        host: String,
-        port: Int,
-        toSend: Array[Byte] ): F[Array[Byte]] =
+  def client[F[_]: Concurrent: ContextShift](
+      socketGroup: SocketGroup,
+      host: String,
+      port: Int,
+      toSend: Array[Byte]
+  ): F[Array[Byte]] =
     socketGroup.client(new InetSocketAddress(host, port)).use { socket =>
       socket.write(Chunk.bytes(toSend)) >>
-        socket.read(8192).map { response =>
-          response.get.toArray
-        }
+        socket.read(8192).map { response => response.get.toArray }
     }
 }
 
-object ClientApp extends IOApp {
+object RedisClientApp extends IOApp {
+  def run(args: List[String]): IO[ExitCode] = {
+
+    val redis = new Redis[IO]
+    redis.ping(new PingRequest(Some("Hola,holita")))
+        .map(rsp => println("Respuesta " + rsp.msg))
+        .map(rsp => ExitCode.Success)
+  }
+}
+
+/*
+object ClientApp extends IOApp
+{
 
   def run(args: List[String]): IO[ExitCode] =
     Blocker[IO].use { blocker =>
@@ -100,7 +120,5 @@ object ClientApp extends IOApp {
             .map(rsp => println("Respuesta " + new String(rsp)))
       }
     }.as(ExitCode.Success)
-
 }
-
-
+ */
