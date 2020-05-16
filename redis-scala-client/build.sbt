@@ -10,6 +10,8 @@ lazy val root = (project in file("."))
     name := "Redis Scala Client",
     libraryDependencies ++= Seq(
       catsEffect,
+      fs2,
+      fs2IO,
       scalaTest % Test
     ),
     scalacOptions ++= Seq(
