@@ -1,36 +1,40 @@
 package redis.protocol
 
-import Marshallers._
-import SyntaxMarshaller._
-import cats.effect.IO
-import java.io.InputStream
+
+import java.net.InetSocketAddress
+import java.io.{InputStream, ByteArrayInputStream}
+
+import cats._
+import cats.data._
+import cats.implicits._
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync, ExitCode, IO, IOApp}
 
 import fs2.{Chunk, Stream}
 import fs2.io.tcp.{Socket, SocketGroup}
-import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.implicits._
-import java.net.InetSocketAddress
-import java.io.ByteArrayInputStream
-import cats.effect.Resource.Par
+
+import Marshallers._
+import SyntaxMarshaller._
 
 class Redis[F[_]: Concurrent: ContextShift] {
   private val marshaller = new CommandMarshaller
   private val parser = new CommandParser
   private val sender = new CommandRedisSender
 
-  def ping(req: PingRequest): F[PingResponse] =
+  def ping(req: PingRequest = PingRequest(Option.empty)): F[PingResponse] =
     sendCommand(req, marshaller.ping, parser.ping)
+
+  def aclList(req: AclListRequest = new AclListRequest()): F[AclListResponse] =
+    sendCommand(req, marshaller.aclList, parser.aclList)
 
   private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
       req: Req,
       marsh: Req => RDArray,
-      pars: RDMessage => Res
+      pars: RDMessage => F[Res]
   ): F[Res] = {
     for {
       lowLevelReq <- marsh(req).pure[F]
       lowLevelRsp <- sender.send(lowLevelReq)
-      msgRsp <- pars(lowLevelRsp).pure[F]
+      msgRsp <- pars(lowLevelRsp)
     } yield msgRsp
   }
 }
@@ -42,12 +46,30 @@ class CommandMarshaller {
     else
       RDArray(RDBulkString("PING"), RDBulkString(req.msg.get))
   }
+
+  def aclList(req: AclListRequest): RDArray = 
+      RDArray(RDBulkString("ACL"), RDBulkString("LIST"))
 }
 
-class CommandParser {
-  def ping(req: RDMessage): PingResponse = {
-    assert(req.isInstanceOf[RDBulkString])
-    PingResponse(new String(req.asInstanceOf[RDBulkString].value))
+class CommandParser[F[_]: Concurrent: ContextShift](implicit M: MonadError[F, Throwable])  {
+  def ping(rsp: RDMessage): F[PingResponse] = {
+    if(rsp.isInstanceOf[RDError]) {
+      return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
+    }
+    assert(rsp.isInstanceOf[RDBulkString])
+    PingResponse(new String(rsp.asInstanceOf[RDBulkString].value)).pure[F]
+  }
+
+  def aclList(rsp: RDMessage): F[AclListResponse] = {
+    if(rsp.isInstanceOf[RDError]) {
+      return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
+    }
+    assert(rsp.isInstanceOf[RDArray])
+    AclListResponse(
+        rsp.asInstanceOf[RDArray].value
+            .map(_.asInstanceOf[RDBulkString])
+            .map(_.value.map(_.toChar).mkString)
+    ).pure[F]
   }
 }
 
@@ -103,9 +125,20 @@ object RedisClientApp extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
 
     val redis = new Redis[IO]
+    /*
     redis.ping(new PingRequest(Some("Hola,holita")))
         .map(rsp => println("Respuesta " + rsp.msg))
         .map(rsp => ExitCode.Success)
+        */
+
+    redis.aclList( new AclListRequest() )
+        .map(rsp => println("Respuesta " + rsp.msg))
+        .map(rsp => ExitCode.Success)
+        .handleError( err => {
+          println("An error happened")
+          err.printStackTrace()
+          ExitCode.Error
+        })
   }
 }
 
