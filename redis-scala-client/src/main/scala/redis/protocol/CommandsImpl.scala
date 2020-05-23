@@ -120,38 +120,3 @@ object Sck {
         socket.read(8192).map { response => response.get.toArray }
     }
 }
-
-object RedisClientApp extends IOApp {
-  def run(args: List[String]): IO[ExitCode] = {
-
-    val redis = new Redis[IO]
-    /*
-    redis.ping(new PingRequest(Some("Hola,holita")))
-        .map(rsp => println("Respuesta " + rsp.msg))
-        .map(rsp => ExitCode.Success)
-        */
-
-    redis.aclList( new AclListRequest() )
-        .map(rsp => println("Respuesta " + rsp.msg))
-        .map(rsp => ExitCode.Success)
-        .handleError( err => {
-          println("An error happened")
-          err.printStackTrace()
-          ExitCode.Error
-        })
-  }
-}
-
-/*
-object ClientApp extends IOApp
-{
-
-  def run(args: List[String]): IO[ExitCode] =
-    Blocker[IO].use { blocker =>
-      SocketGroup[IO](blocker).use { socketGroup =>
-        Sck.client[IO](socketGroup, "127.0.0.1", 5555, "Hello socket".getBytes())
-            .map(rsp => println("Respuesta " + new String(rsp)))
-      }
-    }.as(ExitCode.Success)
-}
- */

@@ -6,13 +6,15 @@ ThisBuild / organization     := "com.example"
 ThisBuild / organizationName := "example"
 
 lazy val root = (project in file("."))
+  .configs(IntegrationTest)
   .settings(
+    Defaults.itSettings,
     name := "Redis Scala Client",
     libraryDependencies ++= Seq(
       catsEffect,
       fs2,
       fs2IO,
-      scalaTest % Test
+      scalaTest % "it,test" 
     ),
     scalacOptions ++= Seq(
       "-feature",
