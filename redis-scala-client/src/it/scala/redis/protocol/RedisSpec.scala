@@ -20,16 +20,30 @@ class RedisSpec extends AnyFlatSpec with Matchers {
     val program = redis
       .ping(new PingRequest(Some("Hola,holita")))
     val rsp = program.unsafeRunSync()
-    rsp.msg shouldBe("Hola,holita")
+    rsp.msg shouldBe ("Hola,holita")
   }
 
-  "Acl List" should "work" in {
+  "Set" should "work" in {
     val program = redis
-      .aclList(new AclListRequest())
+      .set("key", "value")
 
     val rsp = program.unsafeRunSync()
-    rsp.msg should have size 1
-    rsp.msg(0) should startWith("user")
+    rsp shouldBe (())
+  }
+
+  "Set" should "work with param" in {
+    val program = redis
+      .set(
+        SetRequest(
+          "key",
+          "value2",
+          10L.asLeft.some,
+          false.some,
+          true.some
+        )
+      )
+    val rsp = program.unsafeRunSync()
+    rsp.msg shouldBe ("OK")
   }
 
 }

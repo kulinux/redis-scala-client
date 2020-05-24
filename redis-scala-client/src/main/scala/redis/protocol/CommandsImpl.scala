@@ -1,13 +1,20 @@
 package redis.protocol
 
-
 import java.net.InetSocketAddress
 import java.io.{InputStream, ByteArrayInputStream}
 
 import cats._
 import cats.data._
 import cats.implicits._
-import cats.effect.{Blocker, Concurrent, ContextShift, Sync, ExitCode, IO, IOApp}
+import cats.effect.{
+  Blocker,
+  Concurrent,
+  ContextShift,
+  Sync,
+  ExitCode,
+  IO,
+  IOApp
+}
 
 import fs2.{Chunk, Stream}
 import fs2.io.tcp.{Socket, SocketGroup}
@@ -23,8 +30,11 @@ class Redis[F[_]: Concurrent: ContextShift] {
   def ping(req: PingRequest = PingRequest(Option.empty)): F[PingResponse] =
     sendCommand(req, marshaller.ping, parser.ping)
 
-  def aclList(req: AclListRequest = new AclListRequest()): F[AclListResponse] =
-    sendCommand(req, marshaller.aclList, parser.aclList)
+  def set(req: SetRequest): F[SetResponse] =
+    sendCommand(req, marshaller.set, parser.set)
+
+  def set(key: String, value: String): F[Unit] =
+    set(SetRequest(key, value)).map(_ => ())
 
   private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
       req: Req,
@@ -47,29 +57,62 @@ class CommandMarshaller {
       RDArray(RDBulkString("PING"), RDBulkString(req.msg.get))
   }
 
-  def aclList(req: AclListRequest): RDArray = 
-      RDArray(RDBulkString("ACL"), RDBulkString("LIST"))
+  def set(req: SetRequest): RDArray = {
+    def toSet[T](key: String, value: Option[T]): Seq[String] =
+      value.map(xx => Seq(key, xx.toString)).getOrElse(Seq())
+
+    def toSetBoolTrue(key: String, value: Option[Boolean]): Seq[String] =
+      value.filter(v => v).map(xx => Seq(key)).getOrElse(Seq())
+
+    def toSetBool(key1: String, key2: String, value: Option[Boolean]): Seq[String] =
+      value.map(xx => xx match {
+        case true => Seq(key1)
+        case false => Seq(key2)
+      }).getOrElse(Seq())
+
+    def toSetOptionEither[A, B](
+        key1: String,
+        key2: String,
+        value: Option[Either[A, B]]
+    ): Seq[String] = {
+      if(value.isEmpty) return Seq()
+      value.get match {
+        case Left(value) => Seq(key1, value)
+        case Right(value) => Seq(key2, value)
+      }
+      return Seq()
+    }
+
+    val arr: Seq[String] =
+      Seq("SET", req.key, req.value) ++
+      toSetOptionEither("EX", "PX", req.exPx) ++
+      toSetBool("NX", "XX", req.nxNotXX) ++
+      toSetBoolTrue("KEEPTTL", req.keepTtl)
+
+    println(arr)
+
+    RDArray(arr.map(RDBulkString(_)): _*)
+  }
+
 }
 
-class CommandParser[F[_]: Concurrent: ContextShift](implicit M: MonadError[F, Throwable])  {
+class CommandParser[F[_]: Concurrent: ContextShift](
+    implicit M: MonadError[F, Throwable]
+) {
   def ping(rsp: RDMessage): F[PingResponse] = {
-    if(rsp.isInstanceOf[RDError]) {
+    if (rsp.isInstanceOf[RDError]) {
       return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
     }
     assert(rsp.isInstanceOf[RDBulkString])
     PingResponse(new String(rsp.asInstanceOf[RDBulkString].value)).pure[F]
   }
 
-  def aclList(rsp: RDMessage): F[AclListResponse] = {
-    if(rsp.isInstanceOf[RDError]) {
+  def set(rsp: RDMessage): F[SetResponse] = {
+    if (rsp.isInstanceOf[RDError]) {
       return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
     }
-    assert(rsp.isInstanceOf[RDArray])
-    AclListResponse(
-        rsp.asInstanceOf[RDArray].value
-            .map(_.asInstanceOf[RDBulkString])
-            .map(_.value.map(_.toChar).mkString)
-    ).pure[F]
+    assert(rsp.isInstanceOf[RDSimpleString])
+    SetResponse(new String(rsp.asInstanceOf[RDSimpleString].value)).pure[F]
   }
 }
 
