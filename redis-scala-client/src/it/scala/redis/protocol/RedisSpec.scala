@@ -36,7 +36,7 @@ class RedisSpec extends AnyFlatSpec with Matchers {
       .set(
         SetRequest(
           "key",
-          "value2",
+          "value4",
           10L.asLeft.some,
           false.some,
           true.some
@@ -45,5 +45,17 @@ class RedisSpec extends AnyFlatSpec with Matchers {
     val rsp = program.unsafeRunSync()
     rsp.msg shouldBe ("OK")
   }
+
+   "Get" should "work" in {
+    val program = for {
+      _ <- redis.set("monk", "monkv")
+      value <- redis.get("monk")
+    } yield value
+
+    val rsp = program.unsafeRunSync()
+    rsp shouldBe ("monkv".some)
+  }
+
+  
 
 }

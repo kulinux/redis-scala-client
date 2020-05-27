@@ -36,6 +36,12 @@ class Redis[F[_]: Concurrent: ContextShift] {
   def set(key: String, value: String): F[Unit] =
     set(SetRequest(key, value)).map(_ => ())
 
+  def get(req: GetRequest): F[GetResponse] =
+    sendCommand(req, marshaller.get, parser.get)
+
+  def get(key: String): F[Option[String]] =
+    get(GetRequest(key)).map(_.value)
+
   private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
       req: Req,
       marsh: Req => RDArray,
@@ -56,6 +62,8 @@ class CommandMarshaller {
     else
       RDArray(RDBulkString("PING"), RDBulkString(req.msg.get))
   }
+
+  def get(req: GetRequest): RDArray = RDArray(RDBulkString("GET"), RDBulkString(req.key))
 
   def set(req: SetRequest): RDArray = {
     def toSet[T](key: String, value: Option[T]): Seq[String] =
@@ -113,6 +121,14 @@ class CommandParser[F[_]: Concurrent: ContextShift](
     }
     assert(rsp.isInstanceOf[RDSimpleString])
     SetResponse(new String(rsp.asInstanceOf[RDSimpleString].value)).pure[F]
+  }
+
+  def get(rsp: RDMessage): F[GetResponse] = {
+    if (rsp.isInstanceOf[RDError]) {
+      return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
+    }
+    assert(rsp.isInstanceOf[RDBulkString])
+    GetResponse(new String(rsp.asInstanceOf[RDBulkString].value).some).pure[F]
   }
 }
 

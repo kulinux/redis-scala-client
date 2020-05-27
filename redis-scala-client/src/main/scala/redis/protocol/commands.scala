@@ -15,3 +15,6 @@ case class SetRequest(
     keepTtl: Option[Boolean] = Option.empty
 ) extends CommandRequest
 case class SetResponse(msg: String) extends CommandResponse
+
+case class GetRequest(key: String) extends CommandRequest
+case class GetResponse(value: Option[String]) extends CommandResponse
