@@ -107,28 +107,33 @@ class CommandMarshaller {
 class CommandParser[F[_]: Concurrent: ContextShift](
     implicit M: MonadError[F, Throwable]
 ) {
-  def ping(rsp: RDMessage): F[PingResponse] = {
+
+  private def asResponse[T](rsp: RDMessage): F[T] = {
     if (rsp.isInstanceOf[RDError]) {
       return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
     }
-    assert(rsp.isInstanceOf[RDBulkString])
-    PingResponse(new String(rsp.asInstanceOf[RDBulkString].value)).pure[F]
+    return rsp.asInstanceOf[T].pure[F]
+  }
+
+  def ping(rsp: RDMessage): F[PingResponse] = {
+    for {
+      value <- asResponse[RDBulkString](rsp)
+      res <- PingResponse(new String(value.value)).pure[F]
+    } yield res
   }
 
   def set(rsp: RDMessage): F[SetResponse] = {
-    if (rsp.isInstanceOf[RDError]) {
-      return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
-    }
-    assert(rsp.isInstanceOf[RDSimpleString])
-    SetResponse(new String(rsp.asInstanceOf[RDSimpleString].value)).pure[F]
+    for {
+      value <- asResponse[RDSimpleString](rsp)
+      res <- SetResponse(new String(value.value)).pure[F]
+    } yield res
   }
 
   def get(rsp: RDMessage): F[GetResponse] = {
-    if (rsp.isInstanceOf[RDError]) {
-      return M.raiseError(new RuntimeException(rsp.asInstanceOf[RDError].value))
-    }
-    assert(rsp.isInstanceOf[RDBulkString])
-    GetResponse(new String(rsp.asInstanceOf[RDBulkString].value).some).pure[F]
+    for {
+      value <- asResponse[RDBulkString](rsp)
+      res <- GetResponse(new String(value.value).some).pure[F]
+    } yield res
   }
 }
 
