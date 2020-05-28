@@ -6,7 +6,6 @@ trait CommandResponse
 case class PingRequest(msg: Option[String]) extends CommandRequest
 case class PingResponse(msg: String) extends CommandResponse
 
-
 case class SetRequest(
     key: String,
     value: String,
@@ -18,3 +17,7 @@ case class SetResponse(msg: String) extends CommandResponse
 
 case class GetRequest(key: String) extends CommandRequest
 case class GetResponse(value: Option[String]) extends CommandResponse
+
+case class MSetRequest(entries: Map[String, String])
+    extends CommandRequest
+case class MSetResponse(msg: String) extends CommandResponse

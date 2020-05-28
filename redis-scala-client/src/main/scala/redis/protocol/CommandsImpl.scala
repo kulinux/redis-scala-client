@@ -42,6 +42,14 @@ class Redis[F[_]: Concurrent: ContextShift] {
   def get(key: String): F[Option[String]] =
     get(GetRequest(key)).map(_.value)
 
+  def mset(req: MSetRequest): F[MSetResponse] =
+    sendCommand(req, marshaller.mset, parser.mset)
+
+  def mset(entries: Map[String, String]): F[Unit] =
+    mset(MSetRequest(entries)).map(_ => ())
+
+
+
   private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
       req: Req,
       marsh: Req => RDArray,
@@ -102,6 +110,12 @@ class CommandMarshaller {
     RDArray(arr.map(RDBulkString(_)): _*)
   }
 
+  def mset(req: MSetRequest): RDArray = 
+    RDArray(
+      req.entries
+        .foldLeft(Seq("MSET")){ case (a, (k, v)) => a :+ k :+ v }
+        .map(RDBulkString(_)): _*
+    )
 }
 
 class CommandParser[F[_]: Concurrent: ContextShift](
@@ -135,6 +149,16 @@ class CommandParser[F[_]: Concurrent: ContextShift](
       res <- GetResponse(new String(value.value).some).pure[F]
     } yield res
   }
+
+  def mset(rsp: RDMessage): F[MSetResponse] = {
+    for {
+      value <- asResponse[RDSimpleString](rsp)
+      res <- MSetResponse(new String(value.value)).pure[F]
+    } yield res
+  }
+
+
+
 }
 
 class CommandRedisSender {
