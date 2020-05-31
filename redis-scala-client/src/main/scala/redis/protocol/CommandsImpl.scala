@@ -45,9 +45,14 @@ class Redis[F[_]: Concurrent: ContextShift] {
   def mset(req: MSetRequest): F[MSetResponse] =
     sendCommand(req, marshaller.mset, parser.mset)
 
-  def mset(entries: Map[String, String]): F[Unit] =
-    mset(MSetRequest(entries)).map(_ => ())
+  def mset(req: Map[String, String]): F[Unit] =
+    mset(MSetRequest(req)).map(_ => ())
 
+  def mget(req: MGetRequest): F[MGetResponse] =
+    sendCommand(req, marshaller.mget, parser.mget)
+
+  def mget(req: String*): F[Seq[Option[String]]] =
+    mget(MGetRequest(req)).map(rsp => rsp.values)
 
 
   private def sendCommand[Req <: CommandRequest, Res <: CommandResponse](
@@ -116,6 +121,15 @@ class CommandMarshaller {
         .foldLeft(Seq("MSET")){ case (a, (k, v)) => a :+ k :+ v }
         .map(RDBulkString(_)): _*
     )
+
+  def mget(req: MGetRequest): RDArray = 
+    RDArray(
+      req.keys
+        .foldLeft(Seq("MGET")){ case (a, k) => a :+ k }
+        .map(RDBulkString(_)): _*
+    )
+
+
 }
 
 class CommandParser[F[_]: Concurrent: ContextShift](
@@ -132,7 +146,7 @@ class CommandParser[F[_]: Concurrent: ContextShift](
   def ping(rsp: RDMessage): F[PingResponse] = {
     for {
       value <- asResponse[RDBulkString](rsp)
-      res <- PingResponse(new String(value.value)).pure[F]
+      res <- PingResponse(new String(value.asInstanceOf[RDSomeBulkString].value)).pure[F]
     } yield res
   }
 
@@ -146,7 +160,10 @@ class CommandParser[F[_]: Concurrent: ContextShift](
   def get(rsp: RDMessage): F[GetResponse] = {
     for {
       value <- asResponse[RDBulkString](rsp)
-      res <- GetResponse(new String(value.value).some).pure[F]
+      res <- 
+        if(value.isInstanceOf[RDSomeBulkString]) 
+          GetResponse(new String(value.asInstanceOf[RDSomeBulkString].value).some).pure[F]
+        else GetResponse(Option.empty).pure[F]
     } yield res
   }
 
@@ -156,6 +173,21 @@ class CommandParser[F[_]: Concurrent: ContextShift](
       res <- MSetResponse(new String(value.value)).pure[F]
     } yield res
   }
+
+  def mget(rsp: RDMessage): F[MGetResponse] = {
+    for {
+      value <- asResponse[RDArray](rsp)
+      res <- MGetResponse(
+        value.value
+          .map(item =>
+            if(item.isInstanceOf[RDSomeBulkString])
+              new String(item.asInstanceOf[RDSomeBulkString].value).some
+            else Option.empty
+          )
+      ).pure[F]
+    } yield res
+  }
+
 
 
 

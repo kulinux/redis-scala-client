@@ -30,8 +30,7 @@ class RedisSpec extends AnyFlatSpec with Matchers {
     val rsp = program.unsafeRunSync()
     rsp shouldBe (())
   }
-
-  "Set" should "work with param" in {
+  it should "work with param" in {
     val program = redis
       .set(
         SetRequest(
@@ -55,6 +54,14 @@ class RedisSpec extends AnyFlatSpec with Matchers {
     val rsp = program.unsafeRunSync()
     rsp shouldBe ("monkv".some)
   }
+  it should "return empty" in {
+    val program = for {
+      value <- redis.get("not_found")
+    } yield value
+
+    val rsp = program.unsafeRunSync()
+    rsp shouldBe (Option.empty)
+  }
 
   "MSet" should "work" in {
     val program = redis
@@ -63,6 +70,21 @@ class RedisSpec extends AnyFlatSpec with Matchers {
     val rsp = program.unsafeRunSync()
     rsp shouldBe (())
   }
+
+  "MGet" should "work" in {
+    val program = for {
+      _ <- redis.mset(Map("key1" -> "value1", "key2" -> "value2"))
+      res <- redis.mget("key1", "key_not_found", "key2")
+    } yield res
+
+    val rsp = program.unsafeRunSync()
+
+    rsp shouldBe (Seq("value1".some, Option.empty, "value2".some))
+  }
+
+
+
+
 
   
 

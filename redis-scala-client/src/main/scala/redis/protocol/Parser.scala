@@ -94,11 +94,14 @@ class Parser(reader: RDReader) {
 
   def parseInteger() = reader.readInt()
 
-  def parseBulkString(): Array[Byte] = {
+  def parseBulkString(): RDBulkString = {
     val length = reader.readInt()
+    if(length == -1) {//Null Bulk String
+      return RDNullBulkString
+    }
     val res = reader.read(length)
     reader.skip(2)
-    res
+    return RDSomeBulkString(res)
   }
 
   def parseArray(): Seq[RDMessage] = {
@@ -113,7 +116,7 @@ class Parser(reader: RDReader) {
       case '+' => RDSimpleString(parseSimpleString())
       case '-' => RDError(parseErrors())
       case ':' => RDInteger(parseInteger())
-      case '$' => RDBulkString(parseBulkString())
+      case '$' => parseBulkString()
       case '*' => RDArray(parseArray():_*)
       case unknown =>
         throw new RDProtocolException(s"Unknown start of msg $unknown")
@@ -136,9 +139,12 @@ object Marshallers {
     def marshall(m: RDInteger) = (":" + m.value + "\r\n").getBytes()
   }
   implicit object RDBulkStringMarshaller extends Marshaller[RDBulkString] {
-    def marshall(m: RDBulkString) =
-      ("$" + m.value.length + "\r\n").getBytes ++
-        m.value ++ "\r\n".getBytes()
+    def marshall(m: RDBulkString) = m match {
+      case RDNullBulkString => "$-1\r\n".getBytes 
+      case RDSomeBulkString(value) => 
+        ("$" + value.length + "\r\n").getBytes ++
+          value ++ "\r\n".getBytes()
+    }
   }
   implicit object RDArrayMarshaller extends Marshaller[RDArray] {
 
