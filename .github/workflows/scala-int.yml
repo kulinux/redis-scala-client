@@ -1,4 +1,4 @@
-name: Scala CI
+name: Scala Integration Tests
 
 on:
   push:
