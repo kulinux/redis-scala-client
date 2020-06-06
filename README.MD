@@ -1,4 +1,4 @@
-# Scala Client
+# Scala Client.
 
 Implementation of Redis Client
 
