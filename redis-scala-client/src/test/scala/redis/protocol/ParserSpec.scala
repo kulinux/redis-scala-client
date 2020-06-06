@@ -36,7 +36,7 @@ class ParserSpec extends AnyFlatSpec with Matchers {
 
     "Parser" should "parse array" in {
         val msg = "$6\r\nfoobar\r\n"
-        new String(parseMsg(msg).asInstanceOf[RDBulkString].value) should be ("foobar")
+        new String(parseMsg(msg).asInstanceOf[RDSomeBulkString].value) should be ("foobar")
     }
 
     "Parser" should "error on parse wrong simple string" in {
@@ -62,17 +62,17 @@ class ParserSpec extends AnyFlatSpec with Matchers {
 
     "Marshall" should "work" in {
         val msgStr = new RDSimpleString("PING")
-        msgStr.marshall() should be("+PING\r\n".getBytes())
+        msgStr.marshall() should be("+PING\r\n")
         val msgInt = RDInteger(1000)
-        msgInt.marshall should be(":1000\r\n".getBytes())
+        msgInt.marshall should be(":1000\r\n")
 
-        val msgBulk = RDBulkString("foobar".getBytes())
+        val msgBulk = RDBulkString("foobar")
         msgBulk.marshall should be("$6\r\nfoobar\r\n".getBytes())
 
 
         val msgArr = RDArray(
-            RDBulkString("foo".getBytes()),
-            RDBulkString("bar".getBytes())
+            RDBulkString("foo"),
+            RDBulkString("bar")
         )
         msgArr.marshall should be("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".getBytes())
 
