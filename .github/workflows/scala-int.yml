@@ -18,6 +18,6 @@ jobs:
       with:
         java-version: 1.8
     - name: Docker
-      	run: docker-compose up
+      	run: "docker-compose up"
       	working-directory: docker
 
