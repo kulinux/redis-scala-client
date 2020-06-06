@@ -62,9 +62,9 @@ class ParserSpec extends AnyFlatSpec with Matchers {
 
     "Marshall" should "work" in {
         val msgStr = new RDSimpleString("PING")
-        msgStr.marshall() should be("+PING\r\n")
+        msgStr.marshall() should be("+PING\r\n".getBytes())
         val msgInt = RDInteger(1000)
-        msgInt.marshall should be(":1000\r\n")
+        msgInt.marshall should be(":1000\r\n".getBytes())
 
         val msgBulk = RDBulkString("foobar")
         msgBulk.marshall should be("$6\r\nfoobar\r\n".getBytes())
