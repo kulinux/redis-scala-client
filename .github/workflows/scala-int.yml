@@ -20,6 +20,4 @@ jobs:
     - name: Docker
       	run: docker-compose up -d
       	working-directory: docker
-    - name: Integration Tests
-      	run: sbt it:test
-      	working-directory: redis-scala-client
+
